@@ -1,10 +1,11 @@
 # System Architecture — Nexus
 
-**Version:** v1.0.0  
+**Version:** v1.1.0  
 **Status:** Draft  
 **Last Updated:** 2026-06-28  
 **Changelog:**
 - v1.0.0 — Initial architecture: layers, component tree, routing, data flow, auth, state, error handling, ADRs
+- v1.1.0 — Added Architecture Constraints (7 constraints); renumbered sections 2→14
 
 ---
 
@@ -20,7 +21,23 @@
 
 ---
 
-## 2. High-Level Architecture
+## 2. Architecture Constraints
+
+These constraints define what the architecture explicitly excludes. They exist to prevent scope creep disguised as "infrastructure improvements."
+
+| Constraint | Rationale |
+|---|---|
+| **No microservices.** Monolithic Next.js app for MVP. | Splitting services before proving product-market fit adds deployment complexity with zero user benefit. |
+| **No message queues.** No RabbitMQ, Redis, Kafka, or Pub/Sub. | MVP operations are synchronous. Queues only needed if async processing (certificates, emails) is validated. |
+| **No background workers.** No cron jobs, scheduled tasks, or worker processes. | No feature in MVP requires background processing. First background job (if any) should be a simple Vercel cron. |
+| **No WebSockets or Realtime.** Supabase Realtime is available but will not be used in MVP. | Live features are Phase 3. Polling (refresh-to-update) is sufficient for MVP application statuses. |
+| **No AI inference service.** No FastAPI, no ML models, no Python backend. | Cannot build AI without users + data. AI features are Phase 4 at earliest. |
+| **No third-party integrations.** No Slack, Discord, GitHub API, or calendar sync. | Each integration is a maintenance burden. Validate core workflow first. |
+| **No custom backend server.** No Express, Fastify, Django, or any additional server. | Server Actions + RLS cover all MVP data operations. Adding a backend without a proven need is premature. |
+
+---
+
+## 3. High-Level Architecture
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -52,7 +69,7 @@
 
 ---
 
-## 3. Application Layers
+## 4. Application Layers
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -78,9 +95,9 @@
 
 ---
 
-## 4. Component Tree
+## 5. Component Tree
 
-### 4.1 Landing / Auth
+### 5.1 Landing / Auth
 
 ```
 app/page.tsx (Landing)
@@ -89,7 +106,7 @@ app/page.tsx (Landing)
 │   └── GitHubSignInButton
 ```
 
-### 4.2 Discover Events
+### 5.2 Discover Events
 
 ```
 app/(main)/layout.tsx
@@ -108,7 +125,7 @@ app/(main)/events/page.tsx (Discover)
         └── StatusBadge
 ```
 
-### 4.3 Event Details
+### 5.3 Event Details
 
 ```
 app/(main)/events/[id]/page.tsx
@@ -128,7 +145,7 @@ app/(main)/events/[id]/page.tsx
     └── ClosedBadge (if closed)
 ```
 
-### 4.4 My Events
+### 5.4 My Events
 
 ```
 app/(main)/me/events/page.tsx
@@ -144,7 +161,7 @@ app/(main)/me/events/page.tsx
         └── Actions (cancel if pending)
 ```
 
-### 4.5 Developer Passport
+### 5.5 Developer Passport
 
 ```
 app/(main)/passport/page.tsx
@@ -160,7 +177,7 @@ app/(main)/passport/page.tsx
 └── SaveButton
 ```
 
-### 4.6 Organizer Dashboard
+### 5.6 Organizer Dashboard
 
 ```
 app/(main)/organizer/page.tsx
@@ -194,9 +211,9 @@ app/(main)/organizer/events/[id]/applicants/page.tsx
 
 ---
 
-## 5. Routing
+## 6. Routing
 
-### 5.1 MVP Routes
+### 6.1 MVP Routes
 
 | Path | Screen | Auth Required | Role Required |
 |---|---|---|---|
@@ -209,7 +226,7 @@ app/(main)/organizer/events/[id]/applicants/page.tsx
 | `/organizer/events/new` | Create Event | Yes | `organizer` |
 | `/organizer/events/[id]/applicants` | View Applicants | Yes | `organizer` |
 
-### 5.2 Route Architecture
+### 6.2 Route Architecture
 
 - `app/page.tsx` — Landing (public)
 - `app/(main)/layout.tsx` — Authenticated shell with navigation
@@ -219,7 +236,7 @@ app/(main)/organizer/events/[id]/applicants/page.tsx
 - `app/(main)/organizer/` — Organizer Dashboard
 - `app/auth/callback` — OAuth redirect handler
 
-### 5.3 Future Routes (Reserved)
+### 6.3 Future Routes (Reserved)
 
 | Path | Feature | Phase |
 |---|---|---|
@@ -233,9 +250,9 @@ app/(main)/organizer/events/[id]/applicants/page.tsx
 
 ---
 
-## 6. Data Flow
+## 7. Data Flow
 
-### 6.1 Login Flow
+### 7.1 Login Flow
 
 ```
 User → Clicks "Sign in with Google"
@@ -249,7 +266,7 @@ User → Clicks "Sign in with Google"
     → Yes → Redirect to /events (Discover)
 ```
 
-### 6.2 Event Creation Flow
+### 7.2 Event Creation Flow
 
 ```
 Organizer → Fills EventForm
@@ -264,7 +281,7 @@ Organizer → Fills EventForm
       → Event now visible in Discover
 ```
 
-### 6.3 Apply Flow
+### 7.3 Apply Flow
 
 ```
 Student → Opens Event Details
@@ -278,7 +295,7 @@ Student → Opens Event Details
   → Organizer sees new applicant in dashboard
 ```
 
-### 6.4 Passport Update Flow
+### 7.4 Passport Update Flow
 
 ```
 Student → Opens Passport screen
@@ -293,9 +310,9 @@ Student → Opens Passport screen
 
 ---
 
-## 7. Authentication Flow
+## 8. Authentication Flow
 
-### 7.1 OAuth Pipeline
+### 8.1 OAuth Pipeline
 
 ```
 Google / GitHub OAuth
@@ -315,14 +332,14 @@ Check: profile exists in `profiles` table?
    └── Yes → Redirect to /events (Discover)
 ```
 
-### 7.2 Middleware Protection
+### 8.2 Middleware Protection
 
 - Middleware checks for valid Supabase session on every route
 - Public routes: `/` (landing), `/auth/callback`
 - Protected routes: all `/events`, `/me/*`, `/passport`, `/organizer/*`
 - Role-gated routes: `/organizer/*` requires `role = 'organizer'`
 
-### 7.3 Session Handling
+### 8.3 Session Handling
 
 - Supabase stores session in cookies (httpOnly)
 - Middleware refreshes session on each request
@@ -332,9 +349,9 @@ Check: profile exists in `profiles` table?
 
 ---
 
-## 8. Authorization
+## 9. Authorization
 
-### 8.1 Application-Level Permissions
+### 9.1 Application-Level Permissions
 
 | Action | Student | Organizer |
 |---|---|---|
@@ -348,7 +365,7 @@ Check: profile exists in `profiles` table?
 | View applicants | ❌ | ✅ (own events) |
 | Approve/reject applicants | ❌ | ✅ (own events) |
 
-### 8.2 Enforcement Layers
+### 9.2 Enforcement Layers
 
 | Layer | Mechanism |
 |---|---|
@@ -359,9 +376,9 @@ Check: profile exists in `profiles` table?
 
 ---
 
-## 9. State Management
+## 10. State Management
 
-### 9.1 Strategy
+### 10.1 Strategy
 
 | State Type | Tool | Where Used |
 |---|---|---|
@@ -373,7 +390,7 @@ Check: profile exists in `profiles` table?
 
 **No external state library.** MVP does not need Redux, Zustand, or React Query. Server Components handle data fetching natively; Server Actions handle mutations. If client-side caching becomes necessary post-MVP, React Query can be added without architectural changes.
 
-### 9.2 Data Fetching Rules
+### 10.2 Data Fetching Rules
 
 - **Reads:** Server Components fetch data directly using Supabase server client
 - **Mutations:** Server Actions handle inserts, updates, deletes
@@ -382,9 +399,9 @@ Check: profile exists in `profiles` table?
 
 ---
 
-## 10. Error Handling
+## 11. Error Handling
 
-### 10.1 Async Operation Lifecycle
+### 11.1 Async Operation Lifecycle
 
 Every data-fetching or mutation operation follows this pattern:
 
@@ -407,13 +424,13 @@ Every data-fetching or mutation operation follows this pattern:
                          └──────────┘
 ```
 
-### 10.2 Error Boundaries
+### 11.2 Error Boundaries
 
 - **Route level:** `error.tsx` per route segment
 - **Global:** `global-error.tsx` for catastrophic failures
 - **Not found:** `not-found.tsx` for invalid event IDs, missing profiles
 
-### 10.3 Error Categories
+### 11.3 Error Categories
 
 | Category | Example | Handling |
 |---|---|---|
@@ -426,9 +443,9 @@ Every data-fetching or mutation operation follows this pattern:
 
 ---
 
-## 11. Deployment
+## 12. Deployment
 
-### 11.1 Pipeline
+### 12.1 Pipeline
 
 ```
 GitHub (main branch)
@@ -445,7 +462,7 @@ Supabase (managed cloud)
    └── Auth / Storage configured via dashboard
 ```
 
-### 11.2 Environment Variables
+### 12.2 Environment Variables
 
 | Variable | Source | Used By |
 |---|---|---|
@@ -453,7 +470,7 @@ Supabase (managed cloud)
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase Dashboard | Supabase client |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase Dashboard | Server Actions (admin) |
 
-### 11.3 Vercel Configuration
+### 12.3 Vercel Configuration
 
 - Framework preset: Next.js (autodetected)
 - Build command: `next build` (default)
@@ -461,7 +478,7 @@ Supabase (managed cloud)
 - Node.js version: 20.x (LTS)
 - Function region: Default (auto)
 
-### 11.4 MVP Deployment Constraints
+### 12.4 MVP Deployment Constraints
 
 - Free-tier Vercel (Hobby) + Free-tier Supabase
 - No custom domain in MVP (use Vercel subdomain)
@@ -470,9 +487,9 @@ Supabase (managed cloud)
 
 ---
 
-## 12. Future Expansion
+## 13. Future Expansion
 
-### 12.1 AI Service Integration (Phase 4)
+### 13.1 AI Service Integration (Phase 4)
 
 ```
 Next.js App
@@ -490,14 +507,14 @@ FastAPI Microservice (Python)
     Supabase (reads profile/event data for inference)
 ```
 
-### 12.2 Realtime (Phase 3)
+### 13.2 Realtime (Phase 3)
 
 - Supabase Realtime enables:
   - Live notification delivery
   - Event chat messages
   - Application status updates without polling
 
-### 12.3 Storage Expansion (Phase 2+)
+### 13.3 Storage Expansion (Phase 2+)
 
 - Supabase Storage for:
   - Event cover images (MVP — via URL)
@@ -506,7 +523,7 @@ FastAPI Microservice (Python)
 
 ---
 
-## 13. Architecture Decision Records
+## 14. Architecture Decision Records
 
 | ADR | Decision | Reason |
 |---|---|---|
